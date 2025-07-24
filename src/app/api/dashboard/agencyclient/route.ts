@@ -1,5 +1,3 @@
-// app/api/dashboard/agencyclient/route.ts
-
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
@@ -13,26 +11,29 @@ export async function GET(req: Request) {
     }
 
     const clientId = user.id;
-    const today = new Date();
+    const now = new Date();
 
+    // Count upcoming ads: assignments with startTime in future
     const upcomingAds = await prisma.clientDeviceAdAssignment.count({
       where: {
         clientId,
-        date: {
-          gte: today,
+        startTime: {
+          gte: now,
         },
       },
     });
 
+    // Count played ads: assignments with endTime in past
     const adsPlayed = await prisma.clientDeviceAdAssignment.count({
       where: {
         clientId,
-        date: {
-          lt: today,
+        endTime: {
+          lt: now,
         },
       },
     });
 
+    // Count bills for the client
     const bills = await prisma.bill.count({
       where: { clientId },
     });
@@ -40,6 +41,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ upcomingAds, adsPlayed, bills });
   } catch (error) {
     console.error("Dashboard route error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

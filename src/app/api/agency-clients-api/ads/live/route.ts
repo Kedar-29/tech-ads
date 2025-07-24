@@ -5,7 +5,6 @@ export async function GET() {
   try {
     const now = new Date();
 
-    // Fetch all assignments where current time is within startTime and endTime
     const liveAssignments = await prisma.clientDeviceAdAssignment.findMany({
       where: {
         startTime: {
@@ -21,24 +20,14 @@ export async function GET() {
       },
     });
 
-    // Debug logs (optional)
-    console.log("NOW:", now.toISOString());
-    console.log("Live Assignments:", liveAssignments.map(a => ({
-      id: a.id,
-      startTime: a.startTime.toISOString(),
-      endTime: a.endTime.toISOString(),
-    })));
-
-    // Format response with ISO string dates
     const response = liveAssignments.map((a) => ({
       id: a.id,
       clientId: a.clientId,
       deviceId: a.deviceId,
       adId: a.adId,
-      date: a.date.toISOString(),
       startTime: a.startTime.toISOString(),
       endTime: a.endTime.toISOString(),
-      createdAt: a.createdAt.toISOString(),
+      createdAt: a.createdAt.toISOString(), // use createdAt if needed
       ad: {
         id: a.ad.id,
         title: a.ad.title,

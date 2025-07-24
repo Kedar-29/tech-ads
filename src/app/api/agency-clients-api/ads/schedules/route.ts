@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser(req);
+
   if (!user || user.role !== "AGENCY_CLIENT") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
 
   try {
-    // Find assignments where startTime is in future (or now)
+    // Find upcoming assignments for this client
     const assignments = await prisma.clientDeviceAdAssignment.findMany({
       where: {
         clientId: user.id,
@@ -26,10 +27,12 @@ export async function GET(req: NextRequest) {
       orderBy: [{ startTime: "asc" }],
     });
 
-    // Return as JSON (Date objects will be serialized as ISO strings)
     return NextResponse.json(assignments);
   } catch (error) {
     console.error("SCHEDULED_ADS_FETCH_ERROR", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

@@ -27,7 +27,8 @@ interface Assignment {
   clientId: string;
   deviceId: string;
   adId: string;
-  date: string; // ISO string from backend (can keep but unused here)
+  // date is not present in DB, so either remove or keep unused:
+  // date?: string;
   startTime: string; // ISO string
   endTime: string; // ISO string
   createdAt: string;
@@ -38,15 +39,25 @@ interface Assignment {
 export default function ScheduledAdsView() {
   const [ads, setAds] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/agency-clients-api/ads/schedules")
-      .then((res) => res.json())
+    fetch("/api/agency-clients-api/ads/schedules", {
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Error: ${res.status} ${res.statusText}`);
+        }
+        return res.json();
+      })
       .then((data: Assignment[]) => {
         setAds(data);
+        setError(null);
       })
       .catch((err) => {
         console.error("Error fetching scheduled ads:", err);
+        setError("Failed to load scheduled ads.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -61,6 +72,14 @@ export default function ScheduledAdsView() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="py-8 text-center text-destructive font-semibold">
+        {error}
+      </div>
+    );
+  }
+
   if (ads.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground text-sm">
@@ -70,7 +89,7 @@ export default function ScheduledAdsView() {
   }
 
   return (
-    <div className="py-6">
+    <div className="py-6 max-w-7xl mx-auto px-4">
       <h1 className="text-2xl font-bold text-foreground mb-6 text-center">
         📅 Upcoming Scheduled Ads
       </h1>
