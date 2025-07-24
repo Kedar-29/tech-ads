@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Master {
+  id       String @id @default(cuid())
+  name     String
+  email    String @unique
+  password String
+
+  agencies               Agency[]
+  devices                Device[]
+  complaintsFromAgencies AgencyComplaint[] // renamed
+}
+
+model Agency {
+  id       String @id @default(cuid())
+  name     String
+  email    String @unique
+  password String
+  phone    String
+  area     String
+  city     String
+  state    String
+  country  String
+  pincode  String
+  masterId String
+  master   Master @relation(fields: [masterId], references: [id])
+
+  clients               AgencyClient[]
+  ads                   Ad[]
+  devices               Device[]
+  complaintsToMaster    AgencyComplaint[] // renamed
+  complaintsFromClients ClientComplaint[] // renamed
+  bills                 Bill[]
+}
+
+model Device {
+  id          String       @id @default(cuid())
+  uuid        String       @unique
+  name        String
+  size        String
+  model       String
+  latitude    Float
+  longitude   Float
+  apiEndpoint String
+  publicKey   String
+  secretKey   String
+  status      DeviceStatus @default(INACTIVE)
+
+  masterId String
+  master   Master @relation(fields: [masterId], references: [id])
+
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  clientId String?
+  client   AgencyClient? @relation(fields: [clientId], references: [id])
+
+  ads         Ad[]                       @relation("DeviceAds")
+  adPlays     AdPlayLog[]
+  billItems   BillItem[]
+  assignments ClientDeviceAdAssignment[]
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model AgencyClient {
+  id             String @id @default(cuid())
+  name           String
+  businessName   String
+  businessEmail  String @unique
+  password       String
+  whatsappNumber String
+  area           String
+  city           String
+  state          String
+  country        String
+  pincode        String
+  agencyId       String
+  agency         Agency @relation(fields: [agencyId], references: [id])
+
+  complaints  ClientComplaint[] // renamed
+  devices     Device[]
+  bills       Bill[]
+  adPlayLogs  AdPlayLog[]
+  assignments ClientDeviceAdAssignment[]
+}
+
+model Ad {
+  id       String @id @default(cuid())
+  title    String
+  fileUrl  String
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  devices     Device[]                   @relation("DeviceAds")
+  adPlays     AdPlayLog[]
+  billItems   BillItem[]
+  assignments ClientDeviceAdAssignment[]
+}
+
+model ClientDeviceAdAssignment {
+  id       String @id @default(cuid())
+  clientId String
+  deviceId String
+  adId     String
+
+  startTime DateTime
+  endTime   DateTime
+
+  createdAt DateTime @default(now())
+
+  client AgencyClient @relation(fields: [clientId], references: [id])
+  device Device       @relation(fields: [deviceId], references: [id])
+  ad     Ad           @relation(fields: [adId], references: [id])
+}
+
+model AdPlayLog {
+  id       String   @id @default(cuid())
+  adId     String
+  deviceId String
+  clientId String
+  playedAt DateTime @default(now())
+
+  ad     Ad           @relation(fields: [adId], references: [id])
+  device Device       @relation(fields: [deviceId], references: [id])
+  client AgencyClient @relation(fields: [clientId], references: [id])
+}
+
+model AgencyComplaint {
+  id        String          @id @default(cuid())
+  message   String
+  reply     String? // ← Add this
+  status    ComplaintStatus @default(PENDING)
+  agencyId  String
+  masterId  String
+  createdAt DateTime        @default(now())
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+  master Master @relation(fields: [masterId], references: [id])
+}
+
+model ClientComplaint {
+  id        String          @id @default(cuid())
+  message   String
+  reply     String? // add this line
+  status    ComplaintStatus @default(PENDING)
+  clientId  String
+  agencyId  String
+  createdAt DateTime        @default(now())
+
+  client AgencyClient @relation(fields: [clientId], references: [id])
+  agency Agency       @relation(fields: [agencyId], references: [id])
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  DELAYED
+}
+
+model Bill {
+  id            String     @id @default(cuid())
+  invoiceNumber String     @unique
+  agencyId      String
+  clientId      String
+  fromDate      DateTime
+  toDate        DateTime
+  totalPrice    Float
+  status        BillStatus @default(PENDING)
+  createdAt     DateTime   @default(now())
+
+  agency Agency       @relation(fields: [agencyId], references: [id])
+  client AgencyClient @relation(fields: [clientId], references: [id])
+  items  BillItem[]
+}
+
+model BillItem {
+  id         String @id @default(cuid())
+  billId     String
+  adId       String
+  deviceId   String
+  playCount  Int
+  unitPrice  Float
+  totalPrice Float
+
+  bill   Bill   @relation(fields: [billId], references: [id])
+  ad     Ad     @relation(fields: [adId], references: [id])
+  device Device @relation(fields: [deviceId], references: [id])
+}
+
+enum ComplaintStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
