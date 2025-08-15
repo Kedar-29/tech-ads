@@ -1,3 +1,4 @@
+// frontend: AssignTimeSlotForm.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,12 +19,10 @@ interface Client {
   id: string;
   businessName: string;
 }
-
 interface Device {
   id: string;
   name: string;
 }
-
 interface Ad {
   id: string;
   title: string;
@@ -37,15 +36,18 @@ export default function AssignTimeSlotForm() {
   const [clientId, setClientId] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [adId, setAdId] = useState("");
-  const [date, setDate] = useState<Date | null>(null);
+  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
 
   const [loadingForm, setLoadingForm] = useState(true);
   const [assigning, setAssigning] = useState(false);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const [booked, setBooked] = useState<boolean[]>(Array(24).fill(false));
-  const [selRange, setSelRange] = useState<[number, number] | null>(null);
+  const [bookedSlots, setBookedSlots] = useState<Record<string, boolean[]>>({});
+  const [selRanges, setSelRanges] = useState<
+    Record<string, [number, number] | null>
+  >({});
 
+  // Load form data
   useEffect(() => {
     fetch("/api/assignments/form-data")
       .then((r) => r.json())
@@ -61,29 +63,29 @@ export default function AssignTimeSlotForm() {
       });
   }, []);
 
+  // Load booked slots for selected dates
   useEffect(() => {
-    if (deviceId && date) {
-      if (isDateInPast(date)) {
-        toast.error("Cannot select past dates");
-        setDate(null);
-        resetSelection();
-        return;
-      }
-
-      const ds = date.toISOString().slice(0, 10);
-      fetch(`/api/assignments/slots?deviceId=${deviceId}&date=${ds}`)
-        .then((r) => r.json())
-        .then(({ bookedSlots }: { bookedSlots: boolean[] }) => {
-          setBooked(bookedSlots);
-          setSelRange(null);
-        })
-        .catch(() => toast.error("Failed to load booked slots"));
-    } else {
-      resetSelection();
+    if (deviceId && selectedDates.length > 0) {
+      selectedDates.forEach((date) => {
+        if (isDateInPast(date)) {
+          toast.error("Cannot select past dates");
+          setSelectedDates((prev) => prev.filter((d) => d !== date));
+          return;
+        }
+        const ds = date.toISOString().slice(0, 10);
+        fetch(`/api/assignments/slots?deviceId=${deviceId}&date=${ds}`)
+          .then((r) => r.json())
+          .then(({ bookedSlots }: { bookedSlots: boolean[] }) => {
+            setBookedSlots((prev) => ({ ...prev, [ds]: bookedSlots }));
+            setSelRanges((prev) => ({ ...prev, [ds]: null }));
+          })
+          .catch(() => toast.error("Failed to load booked slots"));
+      });
     }
-  }, [deviceId, date]);
+  }, [deviceId, selectedDates]);
 
-  function isDateToday(date: Date): boolean {
+  // Helper functions
+  function isDateToday(date: Date) {
     const today = new Date();
     return (
       date.getDate() === today.getDate() &&
@@ -92,13 +94,13 @@ export default function AssignTimeSlotForm() {
     );
   }
 
-  function isDateInPast(date: Date): boolean {
+  function isDateInPast(date: Date) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return date < today;
   }
 
-  function isDatePastHour(date: Date, hour: number): boolean {
+  function isDatePastHour(date: Date, hour: number) {
     if (isDateInPast(date)) return true;
     if (isDateToday(date)) {
       const now = new Date();
@@ -107,117 +109,63 @@ export default function AssignTimeSlotForm() {
     return false;
   }
 
-  function resetSelection() {
-    setBooked(Array(24).fill(false));
-    setSelRange(null);
-  }
+  const handleClick = (date: Date, h: number) => {
+    const ds = date.toISOString().slice(0, 10);
+    if (!date || isDatePastHour(date, h) || bookedSlots[ds]?.[h]) return;
 
-  const handleClick = (h: number) => {
-    if (!date || isDatePastHour(date, h) || booked[h]) return;
-
+    const selRange = selRanges[ds];
     if (!selRange) {
-      setSelRange([h, h]);
+      setSelRanges((prev) => ({ ...prev, [ds]: [h, h] }));
     } else {
       const [start, end] = selRange;
-      if (h === end + 1) setSelRange([start, h]);
-      else if (h === start - 1) setSelRange([h, end]);
-      else setSelRange([h, h]);
+      if (h === end + 1)
+        setSelRanges((prev) => ({ ...prev, [ds]: [start, h] }));
+      else if (h === start - 1)
+        setSelRanges((prev) => ({ ...prev, [ds]: [h, end] }));
+      else setSelRanges((prev) => ({ ...prev, [ds]: [h, h] }));
     }
   };
 
   const handleSubmit = async () => {
-    if (!clientId || !deviceId || !adId || !date || !selRange) {
-      toast.error("Please fill all fields and select time slot");
+    if (!clientId || !deviceId || !adId || selectedDates.length === 0) {
+      toast.error("Please fill all fields and select dates/time slots");
       return;
     }
 
-    const [start, end] = selRange;
+    const payload = {
+      clientId,
+      deviceId,
+      adId,
+      dates: selectedDates.map((d) => d.toISOString().slice(0, 10)),
+      startTime: "",
+      endTime: "",
+    };
 
-    const startTime = new Date(date);
-    startTime.setHours(start, 0, 0, 0);
-
-    const endTime = new Date(date);
-    endTime.setHours(end + 1, 0, 0, 0);
-
-    // Handle overnight
-    if (end + 1 <= start) endTime.setDate(endTime.getDate() + 1);
+    // Validate selRanges: take earliest start & latest end across all dates
+    const firstDate = selectedDates[0].toISOString().slice(0, 10);
+    const range = selRanges[firstDate];
+    if (!range) {
+      toast.error("Please select time slots");
+      return;
+    }
+    const [start, end] = range;
+    payload.startTime = `${start.toString().padStart(2, "0")}:00:00`;
+    payload.endTime = `${(end + 1).toString().padStart(2, "0")}:00:00`;
 
     setAssigning(true);
     try {
       const res = await fetch("/api/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          deviceId,
-          adId,
-          date: date.toISOString().slice(0, 10),
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Assignment failed");
 
-      if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Assigned successfully!");
-
-      setSelRange(null);
-      setBooked((prev) =>
-        prev.map((b, i) =>
-          start <= end
-            ? i >= start && i <= end
-            : i >= start || i <= end
-            ? true
-            : b
-        )
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Assignment failed");
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const handlePlayNow = async () => {
-    if (!clientId || !deviceId || !adId || !date) {
-      toast.error("Please fill all fields first");
-      return;
-    }
-
-    const hour = new Date().getHours();
-
-    if (isDateToday(date) && booked[hour]) {
-      toast.error("Current hour already booked.");
-      return;
-    }
-
-    const startTime = new Date(date);
-    startTime.setHours(hour, 0, 0, 0);
-
-    const endTime = new Date(date);
-    endTime.setHours(hour + 1, 0, 0, 0);
-    if (hour === 23) {
-      endTime.setDate(endTime.getDate() + 1);
-      endTime.setHours(0);
-    }
-
-    setAssigning(true);
-    try {
-      const res = await fetch("/api/assignments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          deviceId,
-          adId,
-          date: date.toISOString().slice(0, 10),
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        }),
-      });
-
-      if (!res.ok) throw new Error((await res.json()).error);
-      toast.success("Assigned to current slot successfully");
-      setBooked((prev) => prev.map((b, i) => (i === hour ? true : b)));
+      setSelRanges({});
+      setBookedSlots({});
+      setSelectedDates([]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Assignment failed");
     } finally {
@@ -228,7 +176,7 @@ export default function AssignTimeSlotForm() {
   return (
     <div className="space-y-6 max-w-lg mx-auto p-4 bg-white rounded-md shadow-sm border">
       <h2 className="text-xl font-semibold text-center text-foreground">
-        Assign Time Slot
+        Assign Time Slots
       </h2>
 
       {loadingForm ? (
@@ -290,79 +238,90 @@ export default function AssignTimeSlotForm() {
             </Select>
           </div>
 
-          {/* Date */}
+          {/* Dates */}
           <div className="space-y-2">
-            <Label>Date</Label>
-            <DatePicker value={date} onChange={(d) => setDate(d)} />
+            <Label>Select Dates</Label>
+            <DatePicker
+              value={null}
+              onChange={(d: Date | null) => {
+                if (
+                  d &&
+                  !selectedDates.find(
+                    (sd) => sd.toDateString() === d.toDateString()
+                  )
+                ) {
+                  setSelectedDates([...selectedDates, d]);
+                }
+              }}
+            />
+            <div className="flex flex-wrap gap-2 mt-2">
+              {selectedDates.map((d, idx) => (
+                <span
+                  key={idx}
+                  className="bg-blue-100 text-blue-800 px-2 py-1 rounded"
+                >
+                  {d.toDateString()}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedDates(selectedDates.filter((sd) => sd !== d))
+                    }
+                    className="ml-1 text-red-500 font-bold"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Time Slots */}
-          <div className="space-y-2">
-            <Label>Time Slots</Label>
-            <div className="grid grid-cols-6 gap-2">
-              {hours.map((h) => {
-                const disabled = !date || isDatePastHour(date, h) || booked[h];
-                const [start, end] = selRange ?? [-1, -1];
-                const isSelected = h >= start && h <= end;
+          {selectedDates.map((date) => {
+            const ds = date.toISOString().slice(0, 10);
+            const booked = bookedSlots[ds] ?? Array(24).fill(false);
+            const [start, end] = selRanges[ds] ?? [-1, -1];
 
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => handleClick(h)}
-                    title={
-                      isDatePastHour(date!, h)
-                        ? "Past time"
-                        : booked[h]
-                        ? "Already booked"
-                        : "Click to select"
-                    }
-                    className={`p-2 rounded text-center text-sm font-medium transition ${
-                      disabled
-                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        : isSelected
-                        ? "bg-blue-600 text-white"
-                        : "bg-muted hover:bg-accent"
-                    }`}
-                  >
-                    {h === 0
-                      ? "12 AM"
-                      : h < 12
-                      ? `${h} AM`
-                      : h === 12
-                      ? "12 PM"
-                      : `${h - 12} PM`}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="text-xs text-muted-foreground mt-1 flex gap-6">
-              <div>
-                <span className="inline-block w-3 h-3 bg-blue-600 mr-1 rounded-sm" />{" "}
-                Selected
+            return (
+              <div key={ds} className="space-y-2">
+                <Label>Time Slots for {ds}</Label>
+                <div className="grid grid-cols-6 gap-2">
+                  {hours.map((h) => {
+                    const disabled =
+                      !deviceId || isDatePastHour(date, h) || booked[h];
+                    const isSelected = h >= start && h <= end;
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => handleClick(date, h)}
+                        className={`p-2 rounded text-center text-sm font-medium transition ${
+                          disabled
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : isSelected
+                            ? "bg-blue-600 text-white"
+                            : "bg-muted hover:bg-accent"
+                        }`}
+                      >
+                        {h === 0
+                          ? "12 AM"
+                          : h < 12
+                          ? `${h} AM`
+                          : h === 12
+                          ? "12 PM"
+                          : `${h - 12} PM`}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div>
-                <span className="inline-block w-3 h-3 bg-gray-300 mr-1 rounded-sm" />{" "}
-                Disabled
-              </div>
-            </div>
-          </div>
+            );
+          })}
 
-          {/* Actions */}
-          <div className="flex gap-4 justify-between">
-            <Button onClick={handleSubmit} disabled={assigning || !selRange}>
-              {assigning ? "Assigning..." : "Assign Slot"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handlePlayNow}
-              disabled={assigning || !date}
-            >
-              {assigning ? "Assigning..." : "Assign Now"}
-            </Button>
-          </div>
+          {/* Submit */}
+          <Button onClick={handleSubmit} disabled={assigning}>
+            {assigning ? "Assigning..." : "Assign Slots"}
+          </Button>
         </>
       )}
     </div>

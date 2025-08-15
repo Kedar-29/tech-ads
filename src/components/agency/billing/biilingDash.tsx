@@ -9,8 +9,6 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/datepicker";
 import { toast } from "sonner";
 
 interface Client {
@@ -18,14 +16,10 @@ interface Client {
   businessName: string;
 }
 
-interface Completed {
+interface Assignment {
   id: string;
-  date: string;
   ad: { title: string };
   device: { name: string };
-  client: { businessName: string; id: string };
-  startTime: string;
-  endTime: string;
   hours: number;
 }
 
@@ -33,73 +27,55 @@ export default function BillingDashboard() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState<string>("");
   const [unitPrice, setUnitPrice] = useState<number>(50);
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
-  const [completed, setCompleted] = useState<Completed[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [total, setTotal] = useState<number>(0);
 
   useEffect(() => {
     fetch("/api/billing/clients")
       .then((res) => res.json())
-      .then((data: { clients: Client[] }) => {
-        if (Array.isArray(data.clients)) {
-          setClients(data.clients);
-        }
+      .then((data) => {
+        if (Array.isArray(data.clients)) setClients(data.clients);
       })
       .catch(() => toast.error("Failed to load clients"));
   }, []);
 
-  const loadCompleted = async (): Promise<void> => {
-    if (!fromDate || !toDate) return;
-
+  const loadAssignments = async () => {
+    if (!clientId) return;
     try {
-      const res = await fetch(
-        `/api/billing/completed-ads?fromDate=${fromDate.toISOString()}&toDate=${toDate.toISOString()}`
-      );
-
+      const res = await fetch(`/api/billing/unbilled-ads?clientId=${clientId}`);
       const data = await res.json();
-
-      const list: Completed[] = (data.completed || []).filter((c: Completed) =>
-        clientId ? c.client.id === clientId : true
-      );
-
-      if (list.length === 0) {
-        toast.warning("No completed ads found for this period.");
+      if (!data.assignments || data.assignments.length === 0) {
+        toast.warning("No unbilled assignments for this client.");
+        setAssignments([]);
+        setTotal(0);
+        return;
       }
-
-      setCompleted(list);
-
-      const sum = list.reduce((acc: number, c: Completed): number => {
-        return acc + c.hours * unitPrice;
-      }, 0);
-
+      setAssignments(data.assignments);
+      const sum = data.assignments.reduce(
+        (acc: number, a: Assignment) => acc + a.hours * unitPrice,
+        0
+      );
       setTotal(sum);
     } catch {
-      toast.error("Failed to load completed ads");
+      toast.error("Failed to load assignments");
     }
   };
 
-  const generate = async (): Promise<void> => {
-    if (!clientId || !fromDate || !toDate || !unitPrice) return;
-
+  const generateBill = async () => {
+    if (!clientId || assignments.length === 0) return;
     try {
       const res = await fetch("/api/billing/generate-bill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          fromDate: fromDate.toISOString(),
-          toDate: toDate.toISOString(),
-          unitPrice,
-        }),
+        body: JSON.stringify({ clientId, unitPrice }),
       });
-
       if (res.ok) {
         toast.success("✅ Bill generated successfully");
-        setCompleted([]);
+        setAssignments([]);
         setTotal(0);
       } else {
-        toast.error("❌ Failed to generate bill");
+        const data = await res.json();
+        toast.error(data?.error || "❌ Failed to generate bill");
       }
     } catch {
       toast.error("❌ Something went wrong");
@@ -107,124 +83,91 @@ export default function BillingDashboard() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight mb-1">
-          📈 Billing Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Select a client and date range to view completed ads and generate
-          bills.
-        </p>
-      </header>
+    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      <h1 className="text-3xl font-bold text-gray-800">📈 Billing Dashboard</h1>
 
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Client select */}
-        <div className="space-y-1">
-          <label className="block text-sm font-medium">Client</label>
+      {/* Client Selection */}
+      <div className="flex flex-col md:flex-row md:items-center md:gap-4 gap-3">
+        <div className="flex-1">
           <Select value={clientId} onValueChange={setClientId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select client" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a client" />
             </SelectTrigger>
             <SelectContent>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.businessName}
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.businessName}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-
-        {/* From Date */}
-        <div className="space-y-1">
-          <label className="block text-sm font-medium">From Date</label>
-          <DatePicker value={fromDate} onChange={setFromDate} />
-        </div>
-
-        {/* To Date */}
-        <div className="space-y-1">
-          <label className="block text-sm font-medium">To Date</label>
-          <DatePicker value={toDate} onChange={setToDate} />
-        </div>
-
-        {/* Unit Price */}
-        <div className="space-y-1">
-          <label className="block text-sm font-medium">Unit Price (₹/hr)</label>
-          <Input
-            type="number"
-            value={unitPrice}
-            min={0}
-            onChange={(e) => setUnitPrice(+e.target.value)}
-            placeholder="₹ per hour"
-          />
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={loadCompleted} className="w-fit">
-          Load Completed Ads
-        </Button>
-        <Button
-          variant="outline"
-          className="w-fit"
-          onClick={() => {
-            setClientId("");
-            setFromDate(null);
-            setToDate(null);
-            setCompleted([]);
-            setTotal(0);
-          }}
-        >
-          Reset
+        <Button onClick={loadAssignments} className="md:w-auto w-full">
+          Load Assignments
         </Button>
       </div>
 
-      {/* Completed Ads Table */}
-      {completed.length > 0 && (
-        <section className="mt-6 border rounded-md p-4 bg-background space-y-4">
-          <h2 className="text-lg font-semibold border-b pb-2">
-            ✅ Completed Ads: {completed.length}
-          </h2>
+      {/* Unit Price */}
+      <div className="flex items-center gap-2 max-w-xs">
+        <label className="font-medium text-gray-700">Unit Price (₹/hr)</label>
+        <input
+          type="number"
+          value={unitPrice}
+          min={0}
+          onChange={(e) => setUnitPrice(+e.target.value)}
+          className="border border-gray-300 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 w-24 text-right"
+        />
+      </div>
 
-          <div className="grid gap-y-4">
-            {completed.map((c) => (
-              <div
-                key={c.id}
-                className="flex justify-between gap-4 border-b pb-2"
-              >
-                <div>
-                  <div className="font-medium">
-                    {c.date} — {c.ad.title} @ {c.device.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground font-mono">
-                    Time: {c.startTime}:00 to {c.endTime}:00 • Duration:{" "}
-                    {c.hours} hr{c.hours !== 1 ? "s" : ""}
-                  </div>
-                </div>
-                <div className="text-sm font-semibold whitespace-nowrap">
-                  ₹{c.hours * unitPrice}
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Assignments Table */}
+      {assignments.length > 0 && (
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full border-collapse rounded-lg overflow-hidden shadow-md">
+            <thead className="bg-blue-100 text-left text-gray-700">
+              <tr>
+                <th className="px-4 py-2">Ad Title</th>
+                <th className="px-4 py-2">Device</th>
+                <th className="px-4 py-2">Hours</th>
+                <th className="px-4 py-2 text-right">Price (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {assignments.map((a) => (
+                <tr key={a.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-2">{a.ad.title}</td>
+                  <td className="px-4 py-2">{a.device.name}</td>
+                  <td className="px-4 py-2">{a.hours}</td>
+                  <td className="px-4 py-2 text-right">
+                    {a.hours * unitPrice}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-gray-100 font-semibold text-gray-800">
+              <tr>
+                <td colSpan={3} className="px-4 py-2 text-right">
+                  Total:
+                </td>
+                <td className="px-4 py-2 text-right">₹{total}</td>
+              </tr>
+            </tfoot>
+          </table>
 
-          <div className="text-right text-xl font-bold border-t pt-4">
-            Total: ₹{total}
-          </div>
-
-          <div className="text-right">
+          <div className="text-right mt-4">
             <Button
-              variant="secondary"
-              onClick={generate}
-              disabled={!clientId || !fromDate || !toDate}
+              onClick={generateBill}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              Generate Bill Now
+              Generate Bill
             </Button>
           </div>
-        </section>
+        </div>
+      )}
+
+      {assignments.length === 0 && clientId && (
+        <p className="text-gray-500 mt-4 text-center">
+          No unbilled assignments for this client.
+        </p>
       )}
     </div>
   );

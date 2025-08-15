@@ -44,10 +44,10 @@ interface Ad {
 }
 
 const hours = Array.from({ length: 19 }, (_, i) => i + 5);
-const ITEMS_PER_PAGE = 5;
+const ROW_OPTIONS = [5, 10, 20, 50];
 
 const isAssignmentCompleted = (endTimeISO: string): boolean => {
-  return new Date() >= new Date(endTimeISO);
+  return new Date() > new Date(endTimeISO);
 };
 
 export default function AssignmentsManager() {
@@ -65,10 +65,29 @@ export default function AssignmentsManager() {
   const [viewAdUrl, setViewAdUrl] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(assignments.length / ITEMS_PER_PAGE);
-  const paginatedAssignments = assignments.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
+  // Sorting: upcoming -> current -> completed
+  const sortedAssignments = assignments.slice().sort((a, b) => {
+    const now = new Date();
+    const aStart = new Date(a.startTime);
+    const aEnd = new Date(a.endTime);
+    const bStart = new Date(b.startTime);
+    const bEnd = new Date(b.endTime);
+
+    const aStatus = aStart > now ? 1 : aEnd < now ? 3 : 2; // 1=upcoming, 2=current, 3=completed
+    const bStatus = bStart > now ? 1 : bEnd < now ? 3 : 2;
+
+    if (aStatus !== bStatus) return aStatus - bStatus;
+
+    // Sort by start time ascending within same status
+    return aStart.getTime() - bStart.getTime();
+  });
+
+  const totalPages = Math.ceil(sortedAssignments.length / itemsPerPage);
+  const paginatedAssignments = sortedAssignments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   useEffect(() => {
@@ -78,30 +97,21 @@ export default function AssignmentsManager() {
       fetch("/api/ads").then((res) => res.json()),
     ])
       .then(([assignmentsRes, adsArray]) => {
-        console.log("Assignments API response:", assignmentsRes);
-        console.log("Ads API response:", adsArray);
-
-        if (Array.isArray(assignmentsRes.assignments)) {
+        if (Array.isArray(assignmentsRes.assignments))
           setAssignments(assignmentsRes.assignments);
-        } else {
-          console.warn("Invalid assignments data:", assignmentsRes);
-          setAssignments([]);
-        }
+        else setAssignments([]);
 
-        if (Array.isArray(adsArray)) {
-          setAds(adsArray);
-        } else {
-          console.warn("Invalid ads data:", adsArray);
-          setAds([]);
-        }
+        if (Array.isArray(adsArray)) setAds(adsArray);
+        else setAds([]);
       })
       .catch(() => toast.error("Failed to load data"))
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => setCurrentPage(1), [itemsPerPage]);
+
   const openEditDialog = (assignment: Assignment) => {
     setEditing(assignment);
-
     setStartHour(
       new Date(assignment.startTime).getHours().toString().padStart(2, "0")
     );
@@ -123,10 +133,8 @@ export default function AssignmentsManager() {
     start.setHours(parseInt(startHour, 10), 0, 0, 0);
     const end = new Date(originalDate);
     end.setHours(parseInt(endHour, 10), 0, 0, 0);
-
-    if (parseInt(endHour) <= parseInt(startHour)) {
-      end.setDate(end.getDate() + 1); // handle overnight
-    }
+    if (parseInt(endHour) <= parseInt(startHour))
+      end.setDate(end.getDate() + 1);
 
     try {
       const res = await fetch(`/api/assignments/${editing.id}`, {
@@ -159,9 +167,7 @@ export default function AssignmentsManager() {
   const deleteAssignment = async (id: string) => {
     if (!confirm("Delete this assignment?")) return;
     try {
-      const res = await fetch(`/api/assignments/${id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`/api/assignments/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       setAssignments((prev) => prev.filter((a) => a.id !== id));
       toast.success("Deleted assignment");
@@ -172,16 +178,37 @@ export default function AssignmentsManager() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">🎯 Manage Ad Assignments</h1>
-        <p className="text-sm text-muted-foreground">
-          Update or remove ad assignments
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">🎯 Manage Ad Assignments</h1>
+          <p className="text-sm text-muted-foreground">
+            Update or remove ad assignments
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Label>Rows per page:</Label>
+          <Select
+            value={itemsPerPage.toString()}
+            onValueChange={(v) => setItemsPerPage(parseInt(v))}
+          >
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ROW_OPTIONS.map((n) => (
+                <SelectItem key={n} value={n.toString()}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {loading ? (
         <p className="text-center py-10">Loading assignments...</p>
-      ) : assignments.length === 0 ? (
+      ) : paginatedAssignments.length === 0 ? (
         <p className="text-center py-10 text-muted-foreground">
           No assignments found
         </p>
@@ -211,7 +238,7 @@ export default function AssignmentsManager() {
                   return (
                     <TableRow key={a.id}>
                       <TableCell>
-                        {(currentPage - 1) * ITEMS_PER_PAGE + i + 1}
+                        {(currentPage - 1) * itemsPerPage + i + 1}
                       </TableCell>
                       <TableCell>{a.client?.businessName ?? "—"}</TableCell>
                       <TableCell>{a.ad?.title ?? "—"}</TableCell>
@@ -269,7 +296,6 @@ export default function AssignmentsManager() {
             </Table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-between pt-4">
               <p className="text-sm text-muted-foreground">

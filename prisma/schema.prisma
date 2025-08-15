@@ -119,6 +119,7 @@ model ClientDeviceAdAssignment {
   endTime   DateTime
 
   createdAt DateTime @default(now())
+  billed    Boolean  @default(false)
 
   client AgencyClient @relation(fields: [clientId], references: [id])
   device Device       @relation(fields: [deviceId], references: [id])
