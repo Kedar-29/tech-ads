@@ -2,6 +2,35 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+interface ClientDevices {
+  clientName: string;
+  deviceCount: number;
+}
+
+interface ClientAds {
+  clientName: string;
+  assignedAdCount: number;
+}
+
+interface ClientComplaints {
+  [status: string]: number;
+}
+
+interface ClientBilling {
+  clientName: string;
+  totalBill: number;
+}
+
+interface StatsData {
+  totalDevices: number;
+  totalClients: number;
+  totalAdsCount: number;
+  devicesPerClient: ClientDevices[];
+  clientComplaintCounts: Record<string, ClientComplaints>;
+  adsAssignedPerClient: ClientAds[];
+  clientBilling: ClientBilling[];
+}
+
 export async function GET(req: Request) {
   try {
     const user = await getSessionUser(req);
@@ -15,16 +44,17 @@ export async function GET(req: Request) {
     const agency = await prisma.agency.findUnique({
       where: { id: agencyId },
       select: {
-        devices: { select: { id: true, status: true } },
+        devices: { select: { id: true } },
         clients: {
           select: {
             id: true,
             name: true,
             devices: { select: { id: true } },
             complaints: { select: { status: true } },
+            bills: { select: { totalPrice: true } },
           },
         },
-        ads: { select: { id: true, title: true } },
+        ads: { select: { id: true } },
       },
     });
 
@@ -32,85 +62,69 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    // 1. Device Status Counts
-    const deviceStatusCounts: Record<string, number> = {};
-    let totalDevices = 0;
-    for (const device of agency.devices) {
-      const status = device.status ?? "UNKNOWN";
-      deviceStatusCounts[status] = (deviceStatusCounts[status] ?? 0) + 1;
-      totalDevices++;
-    }
+    // 1️⃣ Total devices
+    const totalDevices = agency.devices.length;
 
-    // 2. Devices per Client
-    const devicesPerClient = agency.clients.map((client) => ({
-      clientName: client.name,
-      deviceCount: client.devices.length,
+    // 2️⃣ Devices per client
+    const devicesPerClient: ClientDevices[] = agency.clients.map((c) => ({
+      clientName: c.name,
+      deviceCount: c.devices.length,
     }));
 
-    // 3. Complaint Counts per Client
-    const clientComplaintCounts: Record<string, Record<string, number>> = {};
+    // 3️⃣ Client complaints
+    const clientComplaintCounts: Record<string, ClientComplaints> = {};
     for (const client of agency.clients) {
-      clientComplaintCounts[client.name] = {};
+      const complaints: ClientComplaints = {};
       for (const complaint of client.complaints) {
         const status = complaint.status ?? "UNKNOWN";
-        clientComplaintCounts[client.name][status] =
-          (clientComplaintCounts[client.name][status] ?? 0) + 1;
+        complaints[status] = (complaints[status] ?? 0) + 1;
       }
+      clientComplaintCounts[client.name] = complaints;
     }
 
-    // 4. Total Ads
+    // 4️⃣ Total ads
     const totalAdsCount = agency.ads.length;
 
-    // 5. Ads Assigned per Client
+    // 5️⃣ Ads assigned per client
     const assignments = await prisma.clientDeviceAdAssignment.findMany({
-      where: {
-        clientId: {
-          in: agency.clients.map((c) => c.id),
-        },
-      },
-      select: {
-        adId: true,
-        client: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      where: { clientId: { in: agency.clients.map((c) => c.id) } },
+      select: { client: { select: { name: true } }, adId: true },
     });
 
     const clientAdMap: Record<string, Set<string>> = {};
     for (const assignment of assignments) {
       const clientName = assignment.client.name;
-      if (!clientAdMap[clientName]) {
-        clientAdMap[clientName] = new Set();
-      }
+      if (!clientAdMap[clientName]) clientAdMap[clientName] = new Set();
       clientAdMap[clientName].add(assignment.adId);
     }
 
-    const adsAssignedPerClient = Object.entries(clientAdMap).map(
+    const adsAssignedPerClient: ClientAds[] = Object.entries(clientAdMap).map(
       ([clientName, adSet]) => ({
         clientName,
         assignedAdCount: adSet.size,
       })
     );
 
-    // Final Response
-    return NextResponse.json({
-      stats: {
-        totalDevices,
-        totalClients: agency.clients.length,
-        totalAdsCount,
-        deviceStatusCounts,
-        devicesPerClient,
-        clientComplaintCounts,
-        adsAssignedPerClient,
-      },
-    });
-  } catch (error) {
-    console.error("Agency dashboard fetch error:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    // 6️⃣ Client Billing
+    const clientBilling: ClientBilling[] = agency.clients.map((client) => ({
+      clientName: client.name,
+      totalBill: client.bills.reduce((sum, bill) => sum + bill.totalPrice, 0),
+    }));
+
+    // ✅ Return stats
+    const stats: StatsData = {
+      totalDevices,
+      totalClients: agency.clients.length,
+      totalAdsCount,
+      devicesPerClient,
+      clientComplaintCounts,
+      adsAssignedPerClient,
+      clientBilling,
+    };
+
+    return NextResponse.json({ stats });
+  } catch (err) {
+    console.error("Agency dashboard fetch error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

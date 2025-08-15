@@ -1,70 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-
-const COLORS = ["#4ade80", "#60a5fa", "#facc15", "#f87171", "#a78bfa"];
 
 interface StatusCount {
-  [key: string]: number;
+  PENDING?: number;
+  RESOLVED?: number;
+  REJECTED?: number;
 }
 
 interface DevicesPerAgency {
   agencyName: string;
   deviceCount: number;
+  [key: string]: string | number;
 }
 
-interface ClientComplaintStatusCounts {
-  [key: string]: number;
+interface ClientsPerAgency {
+  agencyName: string;
+  clientCount: number;
+  [key: string]: string | number;
 }
 
 interface AgencyComplaintCounts {
   [agencyName: string]: StatusCount;
 }
 
-interface ClientsPerAgency {
-  agencyName: string;
-  clientCount: number;
-}
-
 interface StatsData {
   totalAgencies: number;
   totalDevices: number;
   totalClients: number;
-  deviceStatusCounts?: StatusCount;
-  complaintStatusCounts?: StatusCount;
   devicesPerAgency: DevicesPerAgency[];
   agencyComplaintCounts: AgencyComplaintCounts;
   clientsPerAgency: ClientsPerAgency[];
-  clientComplaintStatusCounts: ClientComplaintStatusCounts;
-  adStatusCounts: StatusCount;
   totalAdsCount: number;
 }
-
-const formatStatusData = (
-  statusCounts?: StatusCount
-): { name: string; value: number }[] =>
-  Object.entries(statusCounts ?? {}).map(([name, value]) => ({ name, value }));
 
 export default function MasterDashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [quote, setQuote] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/master/dashboard")
@@ -74,245 +49,206 @@ export default function MasterDashboard() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    fetch("https://api.quotable.io/random?tags=business")
+      .then((res) => res.json())
+      .then((data) => setQuote(data.content))
+      .catch(() =>
+        setQuote(
+          "Success usually comes to those who are too busy to be looking for it."
+        )
+      );
   }, []);
 
   if (loading || !stats) {
     return <Skeleton className="h-[600px] w-full rounded-lg" />;
   }
 
-  const deviceStatusData = formatStatusData(stats.deviceStatusCounts);
-  const complaintStatusData = formatStatusData(stats.complaintStatusCounts);
-  const clientComplaintData = formatStatusData(
-    stats.clientComplaintStatusCounts
+  const statsCards = [
+    {
+      label: "Agencies",
+      value: stats.totalAgencies,
+      color: "from-blue-400 to-blue-600",
+    },
+    {
+      label: "Devices",
+      value: stats.totalDevices,
+      color: "from-green-400 to-green-600",
+    },
+    {
+      label: "Clients",
+      value: stats.totalClients,
+      color: "from-yellow-400 to-yellow-600",
+    },
+    {
+      label: "Ads",
+      value: stats.totalAdsCount,
+      color: "from-purple-400 to-purple-600",
+    },
+  ];
+
+  const rowClass =
+    "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200";
+
+  const renderTable = <
+    T extends { [key in K]: string | number },
+    K extends keyof T
+  >(
+    title: string,
+    headers: string[],
+    rows: T[],
+    rowKey: K,
+    renderCells: (item: T) => React.ReactNode
+  ) => (
+    <Card className="border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-md rounded-lg">
+      <CardContent className="p-4">
+        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+          {title}
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full table-auto border-collapse">
+            <thead className="bg-gray-100 dark:bg-gray-800">
+              <tr>
+                {headers.map((header) => (
+                  <th
+                    key={header}
+                    className="font-medium text-gray-700 dark:text-gray-300 text-left px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item, index) => (
+                <tr
+                  key={String(item[rowKey])}
+                  className={`${rowClass} ${
+                    index % 2 === 0
+                      ? "bg-white dark:bg-gray-900"
+                      : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                >
+                  {renderCells(item)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 
+  const renderStatusBadge = (
+    status: number,
+    type: "PENDING" | "RESOLVED" | "REJECTED"
+  ) => {
+    let color = "bg-gray-400 text-white";
+    if (type === "PENDING") color = "bg-yellow-400 text-gray-900";
+    if (type === "RESOLVED") color = "bg-green-500 text-white";
+    if (type === "REJECTED") color = "bg-red-500 text-white";
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}>
+        {status}
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-8 p-6 max-w-7xl mx-auto">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-        <Card className={cn("rounded-xl shadow-md", "bg-blue-100")}>
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Total Agencies
-            </h3>
-            <p className="text-3xl font-extrabold text-black">
-              {stats.totalAgencies}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn("rounded-xl shadow-md", "bg-green-100")}>
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Total Devices
-            </h3>
-            <p className="text-3xl font-extrabold text-black">
-              {stats.totalDevices}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn("rounded-xl shadow-md", "bg-yellow-100")}>
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Total Clients
-            </h3>
-            <p className="text-3xl font-extrabold text-black">
-              {stats.totalClients}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn("rounded-xl shadow-md", "bg-purple-100")}>
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800">Total Ads</h3>
-            <p className="text-3xl font-extrabold text-black">
-              {stats.totalAdsCount}
-            </p>
-          </CardContent>
-        </Card>
+    <div className="space-y-8 p-6 max-w-6xl mx-auto">
+      {/* Quote Banner */}
+      <div className="p-4 rounded-md bg-gradient-to-r from-indigo-400 to-pink-400 dark:from-indigo-700 dark:to-pink-700 text-center italic text-white font-medium shadow-md">
+        {quote}
       </div>
 
-      {/* First row charts */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Device Status - Pie Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Device Status
-            </h2>
-            {deviceStatusData.length === 0 ? (
-              <p className="text-center text-gray-500">No device status data</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={deviceStatusData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={90}
-                    label
-                  >
-                    {deviceStatusData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Complaint Status - Bar Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Complaint Status
-            </h2>
-            {complaintStatusData.length === 0 ? (
-              <p className="text-center text-gray-500">No complaint data</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={complaintStatusData}>
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#f87171" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Devices Per Agency - Line Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Devices Per Agency
-            </h2>
-            {stats.devicesPerAgency.length === 0 ? (
-              <p className="text-center text-gray-500">No agency device data</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={stats.devicesPerAgency}>
-                  <CartesianGrid stroke="#e5e7eb" strokeDasharray="5 5" />
-                  <XAxis
-                    dataKey="agencyName"
-                    angle={-45}
-                    textAnchor="end"
-                    interval={0}
-                    height={60}
-                  />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="deviceCount"
-                    stroke="#4ade80"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {statsCards.map((card) => (
+          <Card
+            key={card.label}
+            className={`flex flex-col items-center justify-center p-6 border border-gray-300 dark:border-gray-700 bg-gradient-to-r ${card.color} text-white shadow-lg rounded-lg`}
+          >
+            <p className="text-3xl font-bold">{card.value}</p>
+            <p className="text-sm mt-1">{card.label}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Second row charts */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Agency Complaint Status - Stacked Bar Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Agency Complaints
-            </h2>
-            {Object.keys(stats.agencyComplaintCounts).length === 0 ? (
-              <p className="text-center text-gray-500">
-                No agency complaints data
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={Object.entries(stats.agencyComplaintCounts).map(
-                    ([agencyName, statusCounts]) => ({
-                      agencyName,
-                      ...statusCounts,
-                    })
-                  )}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="agencyName"
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="PENDING" stackId="a" fill="#facc15" />
-                  <Bar dataKey="RESOLVED" stackId="a" fill="#4ade80" />
-                  <Bar dataKey="REJECTED" stackId="a" fill="#f87171" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+      {/* Devices Table */}
+      <div className="space-y-4">
+        {renderTable<DevicesPerAgency, "agencyName">(
+          "Devices Per Agency",
+          ["Agency", "Devices"],
+          stats.devicesPerAgency,
+          "agencyName",
+          (item) => (
+            <>
+              <td className="px-4 py-2 font-medium text-blue-600 dark:text-blue-400">
+                {item.agencyName}
+              </td>
+              <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">
+                {item.deviceCount}
+              </td>
+            </>
+          )
+        )}
 
-        {/* Clients Per Agency - Bar Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Clients Per Agency
-            </h2>
-            {stats.clientsPerAgency.length === 0 ? (
-              <p className="text-center text-gray-500">No client data</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stats.clientsPerAgency}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="agencyName"
-                    angle={-45}
-                    textAnchor="end"
-                    interval={0}
-                    height={60}
-                  />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="clientCount" fill="#60a5fa" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        {/* Clients Table */}
+        {renderTable<ClientsPerAgency, "agencyName">(
+          "Clients Per Agency",
+          ["Agency", "Clients"],
+          stats.clientsPerAgency,
+          "agencyName",
+          (item) => (
+            <>
+              <td className="px-4 py-2 font-medium text-yellow-600 dark:text-yellow-400">
+                {item.agencyName}
+              </td>
+              <td className="px-4 py-2 font-semibold text-purple-600 dark:text-purple-400">
+                {item.clientCount}
+              </td>
+            </>
+          )
+        )}
 
-        {/* Client Complaint Status - Pie Chart */}
-        <Card className="shadow-lg">
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-700">
-              Client Complaint Status
-            </h2>
-            {clientComplaintData.length === 0 ? (
-              <p className="text-center text-gray-500">
-                No client complaint data
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={clientComplaintData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={100}
-                    label
-                  >
-                    {clientComplaintData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        {/* Complaints Table */}
+        {renderTable<
+          {
+            agencyName: string;
+            PENDING: number;
+            RESOLVED: number;
+            REJECTED: number;
+          },
+          "agencyName"
+        >(
+          "Agency Complaints",
+          ["Agency", "Pending", "Resolved", "Rejected"],
+          Object.entries(stats.agencyComplaintCounts).map(
+            ([agencyName, counts]) => ({
+              agencyName,
+              PENDING: counts?.PENDING ?? 0,
+              RESOLVED: counts?.RESOLVED ?? 0,
+              REJECTED: counts?.REJECTED ?? 0,
+            })
+          ),
+          "agencyName",
+          (item) => (
+            <>
+              <td className="px-4 py-2 font-medium text-indigo-600 dark:text-indigo-400">
+                {item.agencyName}
+              </td>
+              <td className="px-4 py-2">
+                {renderStatusBadge(item.PENDING, "PENDING")}
+              </td>
+              <td className="px-4 py-2">
+                {renderStatusBadge(item.RESOLVED, "RESOLVED")}
+              </td>
+              <td className="px-4 py-2">
+                {renderStatusBadge(item.REJECTED, "REJECTED")}
+              </td>
+            </>
+          )
+        )}
       </div>
     </div>
   );

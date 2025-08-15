@@ -1,165 +1,225 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+import { JSX, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type StatsResponse = {
-  stats: {
-    totalDevices: number;
-    totalClients: number;
-    totalAdsCount: number;
-    deviceStatusCounts: Record<string, number>;
-    devicesPerClient: { clientName: string; deviceCount: number }[];
-    clientComplaintCounts: Record<string, Record<string, number>>;
-    adsAssignedPerClient: { clientName: string; assignedAdCount: number }[];
-  };
-};
+interface ClientDevices {
+  clientName: string;
+  deviceCount: number;
+}
 
-const COLORS = ["#34d399", "#f87171", "#facc15", "#60a5fa", "#c084fc"];
+interface ClientAds {
+  clientName: string;
+  assignedAdCount: number;
+}
+
+interface ClientComplaints {
+  [status: string]: number;
+}
+
+interface StatsData {
+  totalDevices: number;
+  totalClients: number;
+  totalAdsCount: number;
+  devicesPerClient: ClientDevices[];
+  clientComplaintCounts: Record<string, ClientComplaints>;
+  adsAssignedPerClient: ClientAds[];
+}
 
 export default function AgencyDashboard() {
-  const [data, setData] = useState<StatsResponse["stats"] | null>(null);
+  const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard/agency")
-      .then((res) => res.json())
-      .then((json: StatsResponse) => {
-        setData(json.stats);
+    async function fetchStats() {
+      try {
+        const res = await fetch("/api/dashboard/agency");
+        const data: { stats: StatsData } = await res.json();
+        setStats(data.stats);
+      } catch (err) {
+        console.error(err);
+      } finally {
         setLoading(false);
-      });
+      }
+    }
+    fetchStats();
   }, []);
 
-  if (loading || !data) {
+  if (loading || !stats)
+    return <Skeleton className="h-[600px] w-full rounded-lg" />;
+
+  const statsCards = [
+    {
+      label: "Devices",
+      value: stats.totalDevices,
+      color: "from-green-400 to-green-600",
+    },
+    {
+      label: "Clients",
+      value: stats.totalClients,
+      color: "from-yellow-400 to-yellow-600",
+    },
+    {
+      label: "Ads",
+      value: stats.totalAdsCount,
+      color: "from-purple-400 to-purple-600",
+    },
+  ];
+
+  const rowClass =
+    "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200";
+
+  const renderStatusBadge = (
+    status: number,
+    type: "PENDING" | "RESOLVED" | "REJECTED"
+  ) => {
+    let color = "bg-gray-400 text-white";
+    if (type === "PENDING") color = "bg-yellow-400 text-gray-900";
+    if (type === "RESOLVED") color = "bg-green-500 text-white";
+    if (type === "REJECTED") color = "bg-red-500 text-white";
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-96 col-span-full" />
-      </div>
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}>
+        {status}
+      </span>
     );
-  }
+  };
+
+  const renderTable = <T extends Record<K, string | number>, K extends keyof T>(
+    title: string,
+    headers: string[],
+    rows: T[],
+    rowKey: K,
+    renderCells: (item: T) => JSX.Element
+  ) => (
+    <Card className="border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-md rounded-lg">
+      <CardContent className="p-4">
+        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+          {title}
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full table-auto border-collapse">
+            <thead className="bg-gray-100 dark:bg-gray-800">
+              <tr>
+                {headers.map((header) => (
+                  <th
+                    key={header}
+                    className="font-medium text-gray-700 dark:text-gray-300 text-left px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item, index) => (
+                <tr
+                  key={String(item[rowKey])}
+                  className={`${rowClass} ${
+                    index % 2 === 0
+                      ? "bg-white dark:bg-gray-900"
+                      : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                >
+                  {renderCells(item)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {/* Totals */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Overview</h2>
-          <div className="space-y-2 text-sm">
-            <p>
-              Total Devices:{" "}
-              <span className="font-medium">{data.totalDevices}</span>
-            </p>
-            <p>
-              Total Clients:{" "}
-              <span className="font-medium">{data.totalClients}</span>
-            </p>
-            <p>
-              Total Ads:{" "}
-              <span className="font-medium">{data.totalAdsCount}</span>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-8 p-6 max-w-6xl mx-auto">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {statsCards.map((card) => (
+          <Card
+            key={card.label}
+            className={`flex flex-col items-center justify-center p-6 border border-gray-300 dark:border-gray-700 bg-gradient-to-r ${card.color} text-white shadow-lg rounded-lg`}
+          >
+            <p className="text-3xl font-bold">{card.value}</p>
+            <p className="text-sm mt-1">{card.label}</p>
+          </Card>
+        ))}
+      </div>
 
-      {/* Device Status Pie */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Device Status</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={Object.entries(data.deviceStatusCounts).map(
-                  ([name, value]) => ({ name, value })
-                )}
-                cx="50%"
-                cy="50%"
-                outerRadius={70}
-                label
-                dataKey="value"
-              >
-                {Object.keys(data.deviceStatusCounts).map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Devices Per Client Table */}
+      {renderTable<ClientDevices, "clientName">(
+        "Devices Per Client",
+        ["Client", "Devices"],
+        stats.devicesPerClient,
+        "clientName",
+        (item) => (
+          <>
+            <td className="px-4 py-2 font-medium text-blue-600 dark:text-blue-400">
+              {item.clientName}
+            </td>
+            <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">
+              {item.deviceCount}
+            </td>
+          </>
+        )
+      )}
 
-      {/* Devices Per Client Bar */}
-      <Card className="md:col-span-2">
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Devices Per Client</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.devicesPerClient}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="clientName" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="deviceCount" fill="#60a5fa" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Ads Assigned Per Client Table */}
+      {renderTable<ClientAds, "clientName">(
+        "Ads Assigned Per Client",
+        ["Client", "Ads Assigned"],
+        stats.adsAssignedPerClient,
+        "clientName",
+        (item) => (
+          <>
+            <td className="px-4 py-2 font-medium text-purple-600 dark:text-purple-400">
+              {item.clientName}
+            </td>
+            <td className="px-4 py-2 font-semibold text-yellow-600 dark:text-yellow-400">
+              {item.assignedAdCount}
+            </td>
+          </>
+        )
+      )}
 
-      {/* Ads Assigned Per Client */}
-      <Card className="md:col-span-1">
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Ads Assigned Per Client
-          </h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={data.adsAssignedPerClient}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="clientName" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="assignedAdCount" fill="#facc15" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Complaint Stats */}
-      <Card className="md:col-span-1">
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Client Complaints</h2>
-          <div className="space-y-3 text-sm">
-            {Object.entries(data.clientComplaintCounts).map(
-              ([client, statuses]) => (
-                <div key={client}>
-                  <p className="font-medium">{client}</p>
-                  <ul className="ml-4 list-disc">
-                    {Object.entries(statuses).map(([status, count]) => (
-                      <li key={status}>
-                        {status}: {count}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Client Complaints Table */}
+      {renderTable<
+        {
+          clientName: string;
+          PENDING: number;
+          RESOLVED: number;
+          REJECTED: number;
+        },
+        "clientName"
+      >(
+        "Client Complaints",
+        ["Client", "Pending", "Resolved", "Rejected"],
+        Object.entries(stats.clientComplaintCounts).map(
+          ([clientName, counts]) => ({
+            clientName,
+            PENDING: counts.PENDING ?? 0,
+            RESOLVED: counts.RESOLVED ?? 0,
+            REJECTED: counts.REJECTED ?? 0,
+          })
+        ),
+        "clientName",
+        (item) => (
+          <>
+            <td className="px-4 py-2 font-medium text-indigo-600 dark:text-indigo-400">
+              {item.clientName}
+            </td>
+            <td className="px-4 py-2">
+              {renderStatusBadge(item.PENDING, "PENDING")}
+            </td>
+            <td className="px-4 py-2">
+              {renderStatusBadge(item.RESOLVED, "RESOLVED")}
+            </td>
+            <td className="px-4 py-2">
+              {renderStatusBadge(item.REJECTED, "REJECTED")}
+            </td>
+          </>
+        )
+      )}
     </div>
   );
 }

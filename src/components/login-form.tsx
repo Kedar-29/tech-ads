@@ -61,7 +61,7 @@ export function LoginForm({
   return (
     <div
       className={cn(
-        "flex min-h-screen items-center justify-center px-4 py-10 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-950",
+        "flex w-full items-center justify-center px-6 py-10",
         className
       )}
       {...props}
@@ -70,18 +70,23 @@ export function LoginForm({
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative"
       >
-        <Card className="shadow-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900">
+        {/* Glow Effect Behind Card */}
+        <div className="pointer-events-none absolute inset-0 -z-10 blur-3xl opacity-40 bg-cyan-500/60 rounded-3xl" />
+
+        <Card className="rounded-2xl bg-slate-900/80 border border-cyan-500/20 shadow-[0_0_28px_rgba(34,211,238,0.22)] backdrop-blur-md">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-gray-800 dark:text-white">
-              Login to your account
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent text-center">
+              Welcome User
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
               <div className="grid gap-2">
-                <Label htmlFor="email" className="dark:text-gray-300">
+                <Label htmlFor="email" className="text-gray-300">
                   Email
                 </Label>
                 <Input
@@ -91,12 +96,13 @@ export function LoginForm({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400"
                 />
               </div>
 
+              {/* Password Field */}
               <div className="grid gap-2 relative">
-                <Label htmlFor="password" className="dark:text-gray-300">
+                <Label htmlFor="password" className="text-gray-300">
                   Password
                 </Label>
                 <Input
@@ -105,24 +111,25 @@ export function LoginForm({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pr-10 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 pr-10 focus:border-cyan-400 focus:ring-cyan-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-9 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white"
+                  className="absolute right-3 top-9 text-gray-400 hover:text-cyan-400"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
 
+              {/* Submit Button */}
               <motion.div
                 whileTap={{ scale: 0.98 }}
                 whileHover={{ scale: 1.01 }}
               >
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 dark:from-blue-600 dark:to-indigo-700 dark:hover:from-blue-700 dark:hover:to-indigo-800"
+                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/30"
                   disabled={loading}
                 >
                   {loading ? (
