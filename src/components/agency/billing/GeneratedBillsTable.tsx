@@ -25,14 +25,12 @@ interface Client {
   country?: string;
   pincode?: string;
 }
-
 interface BillItem {
   ad: { title: string };
   device: { name: string };
   playCount: number;
   totalPrice: number;
 }
-
 interface Bill {
   id: string;
   fromDate: string;
@@ -51,45 +49,31 @@ export default function GeneratedBillsTable() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // Format address
-  const formatAddress = (client: Client): string => {
-    const parts = [
-      client.area,
-      client.city,
-      client.state,
-      client.country,
-      client.pincode,
-    ];
-    return parts.filter(Boolean).join(", ");
-  };
+  const formatAddress = (client: Client) =>
+    [client.area, client.city, client.state, client.country, client.pincode]
+      .filter(Boolean)
+      .join(", ") || "N/A";
 
-  // WhatsApp sharing
   const handleWhatsapp = (bill: Bill) => {
-    if (!bill.client.whatsappNumber) {
-      alert("Client WhatsApp number not available.");
-      return;
-    }
-
+    if (!bill.client.whatsappNumber)
+      return alert("Client WhatsApp number not available.");
     const pdfUrl = `${window.location.origin}/api/billing/pdf/${bill.id}`;
-    const msg = `Hello ${bill.client.businessName},\nYour bill (Invoice #: ${
+    const msg = `Hello ${bill.client.businessName},\nInvoice #: ${
       bill.invoiceNumber ?? "N/A"
-    }) from ${bill.fromDate} to ${bill.toDate} is ₹${bill.totalPrice.toFixed(
-      2
-    )}.\nAddress: ${formatAddress(
+    }\nTotal: ₹${bill.totalPrice.toFixed(2)}\nAddress: ${formatAddress(
       bill.client
-    )}\n\nDownload/view your bill:\n${pdfUrl}`;
-
-    const encodedMsg = encodeURIComponent(msg);
-    const whatsappUrl = `https://wa.me/${bill.client.whatsappNumber}?text=${encodedMsg}`;
-    window.open(whatsappUrl, "_blank");
+    )}\n\nDownload: ${pdfUrl}`;
+    window.open(
+      `https://wa.me/${bill.client.whatsappNumber}?text=${encodeURIComponent(
+        msg
+      )}`,
+      "_blank"
+    );
   };
 
-  // View PDF
-  const handleViewPdf = (id: string) => {
+  const handleViewPdf = (id: string) =>
     window.open(`/api/billing/pdf/${id}`, "_blank");
-  };
 
-  // Fetch bills with filters
   const fetchBills = useCallback(() => {
     const params = new URLSearchParams();
     if (clientId !== "ALL") params.append("clientId", clientId);
@@ -112,7 +96,6 @@ export default function GeneratedBillsTable() {
     fetchBills();
   }, [fetchBills]);
 
-  // Update bill status API call
   const updateBillStatus = async (billId: string, status: string) => {
     try {
       const res = await fetch(`/api/billing/update-status`, {
@@ -120,23 +103,19 @@ export default function GeneratedBillsTable() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ billId, status }),
       });
-
-      if (!res.ok) throw new Error("Failed to update status");
-
-      fetchBills(); // Refresh bills after update
-    } catch (err) {
-      console.error("UPDATE_STATUS_ERROR", err);
-      alert("Failed to update bill status.");
+      if (!res.ok) throw new Error("Failed");
+      fetchBills();
+    } catch {
+      alert("Failed to update status.");
     }
   };
 
-  // Helper for colored badge based on status
   const renderStatusBadge = (status: Bill["status"]) => {
     switch (status) {
       case "PAID":
-        return <Badge variant="secondary">Paid</Badge>; // fixed variant
+        return <Badge variant="secondary">Paid</Badge>;
       case "PENDING":
-        return <Badge variant="outline">Pending</Badge>; // fixed variant
+        return <Badge variant="outline">Pending</Badge>;
       case "DELAYED":
         return <Badge variant="destructive">Delayed</Badge>;
       default:
@@ -157,7 +136,6 @@ export default function GeneratedBillsTable() {
 
       {/* Filters */}
       <div className="p-4 border rounded-md shadow-sm bg-white flex flex-col md:flex-row md:flex-wrap gap-4 items-end">
-        {/* Client filter */}
         <div className="flex-1 min-w-[200px]">
           <Label>Select Client</Label>
           <Select value={clientId} onValueChange={setClientId}>
@@ -166,16 +144,14 @@ export default function GeneratedBillsTable() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All Clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.businessName}
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.businessName}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-
-        {/* From Date */}
         <div className="min-w-[180px]">
           <Label htmlFor="fromDate">From Date</Label>
           <Input
@@ -185,8 +161,6 @@ export default function GeneratedBillsTable() {
             onChange={(e) => setFromDate(e.target.value)}
           />
         </div>
-
-        {/* To Date */}
         <div className="min-w-[180px]">
           <Label htmlFor="toDate">To Date</Label>
           <Input
@@ -196,8 +170,6 @@ export default function GeneratedBillsTable() {
             onChange={(e) => setToDate(e.target.value)}
           />
         </div>
-
-        {/* Actions */}
         <div className="flex gap-2">
           <Button onClick={fetchBills}>Apply</Button>
           <Button
@@ -213,7 +185,6 @@ export default function GeneratedBillsTable() {
         </div>
       </div>
 
-      {/* Bill cards */}
       {bills.length === 0 ? (
         <p className="text-center text-muted-foreground py-12">
           No bills available.
@@ -228,94 +199,52 @@ export default function GeneratedBillsTable() {
                     <div className="font-semibold">
                       {bill.client.businessName}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Invoice #: {bill.invoiceNumber ?? "N/A"}
+                    <div className="text-xs text-muted-foreground">
+                      {formatAddress(bill.client)}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {format(new Date(bill.fromDate), "PPP")} —{" "}
-                      {format(new Date(bill.toDate), "PPP")}
-                    </div>
-                    <div className="mt-1">{renderStatusBadge(bill.status)}</div>
                   </div>
-
-                  <div className="flex flex-col gap-2 items-end">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewPdf(bill.id)}
-                      >
-                        View PDF
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleWhatsapp(bill)}
-                      >
-                        WhatsApp
-                      </Button>
-                    </div>
-
-                    {/* Status Select */}
-                    <Select
-                      value={bill.status}
-                      onValueChange={(newStatus) =>
-                        updateBillStatus(bill.id, newStatus)
-                      }
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PENDING">🕒 Pending</SelectItem>
-                        <SelectItem value="PAID">✅ Paid</SelectItem>
-                        <SelectItem value="DELAYED">⚠️ Delayed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {renderStatusBadge(bill.status)}
                 </CardTitle>
               </CardHeader>
-
-              <CardContent className="text-sm space-y-2">
-                <p>
-                  <strong>Address:</strong> {formatAddress(bill.client)}
-                </p>
-                <p>
-                  <strong>WhatsApp:</strong>{" "}
-                  {bill.client.whatsappNumber ? (
-                    <a
-                      className="text-green-600 underline"
-                      href={`https://wa.me/${bill.client.whatsappNumber}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {bill.client.whatsappNumber}
-                    </a>
-                  ) : (
-                    "Not available"
-                  )}
-                </p>
-
-                {/* Items */}
-                <div className="pt-2 border-t space-y-1">
-                  {bill.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-start text-sm"
-                    >
-                      <div>
-                        {item.ad.title} @ {item.device.name} — {item.playCount}{" "}
-                        hrs
-                      </div>
-                      <div className="font-medium">
-                        ₹{item.totalPrice.toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
+              <CardContent className="space-y-2">
+                <div>
+                  <strong>Invoice:</strong> {bill.invoiceNumber ?? "N/A"}
                 </div>
-
-                <div className="pt-2 text-right border-t font-bold">
-                  Total: ₹{bill.totalPrice.toFixed(2)}
+                <div>
+                  <strong>From:</strong>{" "}
+                  {format(new Date(bill.fromDate), "dd/MM/yyyy")} |{" "}
+                  <strong>To:</strong>{" "}
+                  {format(new Date(bill.toDate), "dd/MM/yyyy")}
+                </div>
+                <div>
+                  <strong>Total:</strong> ₹{bill.totalPrice.toFixed(2)}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" onClick={() => handleViewPdf(bill.id)}>
+                    View PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleWhatsapp(bill)}
+                  >
+                    WhatsApp
+                  </Button>
+                  <Select
+                    defaultValue={bill.status}
+                    onValueChange={(val) =>
+                      updateBillStatus(bill.id, val as Bill["status"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                      <SelectItem value="PAID">Paid</SelectItem>
+                      <SelectItem value="DELAYED">Delayed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>

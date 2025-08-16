@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 
-// 📘 Types
 type BillStatus = "ALL" | "PAID" | "PENDING" | "DELAYED";
 
 interface Bill {
@@ -53,8 +52,26 @@ interface Bill {
 }
 
 interface BillDetails extends Bill {
-  agency: { name: string; email: string };
-  client: { businessName: string; businessEmail: string };
+  agency: {
+    name: string;
+    email: string;
+    area?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    pincode?: string;
+    phone?: string;
+  };
+  client: {
+    businessName: string;
+    businessEmail: string;
+    area?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    pincode?: string;
+    whatsappNumber?: string;
+  };
   items: {
     id: string;
     playCount: number;
@@ -118,7 +135,7 @@ export function ClientBillsTable() {
   });
 
   return (
-    <div className="p-2 sm:p-4 md:p-6">
+    <div className="p-4">
       <div className="text-center mb-6 space-y-4">
         <h1 className="text-xl font-semibold">Billing History</h1>
 
@@ -131,14 +148,12 @@ export function ClientBillsTable() {
                 className="flex items-center justify-start w-full sm:w-[260px] p-2 text-sm text-left"
               >
                 <CalendarIcon className="h-4 w-4 mr-2" />
-                {dateRange?.from && dateRange?.to ? (
-                  <>
-                    {format(dateRange.from, "dd MMM yyyy")} -{" "}
-                    {format(dateRange.to, "dd MMM yyyy")}
-                  </>
-                ) : (
-                  <span>Select date range</span>
-                )}
+                {dateRange?.from && dateRange?.to
+                  ? `${format(dateRange.from, "dd MMM yyyy")} - ${format(
+                      dateRange.to,
+                      "dd MMM yyyy"
+                    )}`
+                  : "Select date range"}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto p-0">
@@ -195,10 +210,13 @@ export function ClientBillsTable() {
                   <TableCell className="font-medium">
                     {bill.invoiceNumber}
                   </TableCell>
-                  <TableCell>
-                    {format(new Date(bill.fromDate), "dd MMM yyyy")} -{" "}
-                    {format(new Date(bill.toDate), "dd MMM yyyy")}
-                  </TableCell>
+                  <TableCell>{`${format(
+                    parseISO(bill.fromDate),
+                    "dd MMM yyyy"
+                  )} - ${format(
+                    parseISO(bill.toDate),
+                    "dd MMM yyyy"
+                  )}`}</TableCell>
                   <TableCell>
                     <Badge
                       variant={
@@ -214,7 +232,7 @@ export function ClientBillsTable() {
                   </TableCell>
                   <TableCell>₹{bill.totalPrice.toFixed(2)}</TableCell>
                   <TableCell>
-                    {format(new Date(bill.createdAt), "dd MMM yyyy")}
+                    {format(parseISO(bill.createdAt), "dd MMM yyyy")}
                   </TableCell>
                   <TableCell className="flex justify-center gap-2">
                     <Button
@@ -244,11 +262,13 @@ export function ClientBillsTable() {
       {/* PDF Dialog */}
       <Dialog open={showPDF} onOpenChange={setShowPDF}>
         <DialogContent className="max-w-7xl w-full h-[85vh] p-0 overflow-hidden">
-          <iframe
-            src={`/api/agency-clients-api/bills/pdf/${selectedBillId}`}
-            className="w-full h-full"
-            frameBorder="0"
-          />
+          {selectedBillId && (
+            <iframe
+              src={`/api/agency-clients-api/bills/pdf/${selectedBillId}`}
+              className="w-full h-full"
+              frameBorder="0"
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -289,19 +309,19 @@ export function ClientBillsTable() {
                   <p>
                     <strong>Period:</strong>{" "}
                     {format(
-                      new Date(selectedBillDetails.fromDate),
+                      parseISO(selectedBillDetails.fromDate),
                       "dd MMM yyyy"
                     )}{" "}
                     -{" "}
                     {format(
-                      new Date(selectedBillDetails.toDate),
+                      parseISO(selectedBillDetails.toDate),
                       "dd MMM yyyy"
                     )}
                   </p>
                   <p>
                     <strong>Created:</strong>{" "}
                     {format(
-                      new Date(selectedBillDetails.createdAt),
+                      parseISO(selectedBillDetails.createdAt),
                       "dd MMM yyyy"
                     )}
                   </p>
@@ -325,30 +345,36 @@ export function ClientBillsTable() {
 
               <Separator className="my-4" />
 
-              <ScrollArea className="max-h-[300px] rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Ad Title</TableHead>
-                      <TableHead>Device</TableHead>
-                      <TableHead>Play Count</TableHead>
-                      <TableHead>Unit Price</TableHead>
-                      <TableHead>Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedBillDetails.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.ad.title}</TableCell>
-                        <TableCell>{item.device.name}</TableCell>
-                        <TableCell>{item.playCount}</TableCell>
-                        <TableCell>₹{item.unitPrice.toFixed(2)}</TableCell>
-                        <TableCell>₹{item.totalPrice.toFixed(2)}</TableCell>
+              {selectedBillDetails.items.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">
+                  No items found for this bill.
+                </p>
+              ) : (
+                <ScrollArea className="max-h-[300px] rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ad Title</TableHead>
+                        <TableHead>Device</TableHead>
+                        <TableHead>Play Count</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Total</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedBillDetails.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.ad.title}</TableCell>
+                          <TableCell>{item.device.name}</TableCell>
+                          <TableCell>{item.playCount}</TableCell>
+                          <TableCell>₹{item.unitPrice.toFixed(2)}</TableCell>
+                          <TableCell>₹{item.totalPrice.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
             </>
           ) : null}
         </DialogContent>
