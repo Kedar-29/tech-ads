@@ -61,7 +61,7 @@ export function LoginForm({
   return (
     <div
       className={cn(
-        "flex w-full items-center justify-center px-6 py-10",
+        "flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-10 bg-slate-950",
         className
       )}
       {...props}
@@ -70,23 +70,26 @@ export function LoginForm({
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md relative"
+        className="w-full max-w-sm sm:max-w-md relative"
       >
         {/* Glow Effect Behind Card */}
         <div className="pointer-events-none absolute inset-0 -z-10 blur-3xl opacity-40 bg-cyan-500/60 rounded-3xl" />
 
-        <Card className="rounded-2xl bg-slate-900/80 border border-cyan-500/20 shadow-[0_0_28px_rgba(34,211,238,0.22)] backdrop-blur-md">
+        <Card className="rounded-2xl bg-slate-900/90 border border-cyan-500/20 shadow-[0_0_28px_rgba(34,211,238,0.22)] backdrop-blur-md">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent text-center">
-              Welcome User
+            <CardTitle className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent text-center">
+              Welcome Back
             </CardTitle>
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
               {/* Email Field */}
               <div className="grid gap-2">
-                <Label htmlFor="email" className="text-gray-300">
+                <Label
+                  htmlFor="email"
+                  className="text-gray-300 text-sm sm:text-base"
+                >
                   Email
                 </Label>
                 <Input
@@ -96,13 +99,16 @@ export function LoginForm({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400"
+                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 text-sm sm:text-base"
                 />
               </div>
 
               {/* Password Field */}
               <div className="grid gap-2 relative">
-                <Label htmlFor="password" className="text-gray-300">
+                <Label
+                  htmlFor="password"
+                  className="text-gray-300 text-sm sm:text-base"
+                >
                   Password
                 </Label>
                 <Input
@@ -111,7 +117,7 @@ export function LoginForm({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 pr-10 focus:border-cyan-400 focus:ring-cyan-400"
+                  className="bg-slate-800/60 border-cyan-500/30 text-white placeholder-gray-400 pr-10 focus:border-cyan-400 focus:ring-cyan-400 text-sm sm:text-base"
                 />
                 <button
                   type="button"
@@ -129,7 +135,7 @@ export function LoginForm({
               >
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/30"
+                  className="w-full py-5 sm:py-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/30 text-base sm:text-lg"
                   disabled={loading}
                 >
                   {loading ? (
@@ -137,7 +143,7 @@ export function LoginForm({
                   ) : (
                     <span className="flex items-center justify-center">
                       Login
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                     </span>
                   )}
                 </Button>
