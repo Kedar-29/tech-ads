@@ -1,4 +1,3 @@
-// frontend: AssignTimeSlotForm.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -67,12 +66,7 @@ export default function AssignTimeSlotForm() {
   useEffect(() => {
     if (deviceId && selectedDates.length > 0) {
       selectedDates.forEach((date) => {
-        if (isDateInPast(date)) {
-          toast.error("Cannot select past dates");
-          setSelectedDates((prev) => prev.filter((d) => d !== date));
-          return;
-        }
-        const ds = date.toISOString().slice(0, 10);
+        const ds = dateToLocalString(date);
         fetch(`/api/assignments/slots?deviceId=${deviceId}&date=${ds}`)
           .then((r) => r.json())
           .then(({ bookedSlots }: { bookedSlots: boolean[] }) => {
@@ -84,15 +78,11 @@ export default function AssignTimeSlotForm() {
     }
   }, [deviceId, selectedDates]);
 
-  // Helper functions
-  function isDateToday(date: Date) {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  }
+  // Convert date to YYYY-MM-DD local string
+  const dateToLocalString = (date: Date) => {
+    const tzOffset = date.getTimezoneOffset() * 60000; // in ms
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 10);
+  };
 
   function isDateInPast(date: Date) {
     const today = new Date();
@@ -102,15 +92,17 @@ export default function AssignTimeSlotForm() {
 
   function isDatePastHour(date: Date, hour: number) {
     if (isDateInPast(date)) return true;
-    if (isDateToday(date)) {
-      const now = new Date();
-      return hour < now.getHours();
-    }
-    return false;
+    const now = new Date();
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate() &&
+      hour < now.getHours()
+    );
   }
 
   const handleClick = (date: Date, h: number) => {
-    const ds = date.toISOString().slice(0, 10);
+    const ds = dateToLocalString(date);
     if (!date || isDatePastHour(date, h) || bookedSlots[ds]?.[h]) return;
 
     const selRange = selRanges[ds];
@@ -136,13 +128,12 @@ export default function AssignTimeSlotForm() {
       clientId,
       deviceId,
       adId,
-      dates: selectedDates.map((d) => d.toISOString().slice(0, 10)),
+      dates: selectedDates.map(dateToLocalString),
       startTime: "",
       endTime: "",
     };
 
-    // Validate selRanges: take earliest start & latest end across all dates
-    const firstDate = selectedDates[0].toISOString().slice(0, 10);
+    const firstDate = dateToLocalString(selectedDates[0]);
     const range = selRanges[firstDate];
     if (!range) {
       toast.error("Please select time slots");
@@ -244,8 +235,12 @@ export default function AssignTimeSlotForm() {
             <DatePicker
               value={null}
               onChange={(d: Date | null) => {
+                if (!d) return;
+                if (isDateInPast(d)) {
+                  toast.error("Cannot select past dates");
+                  return;
+                }
                 if (
-                  d &&
                   !selectedDates.find(
                     (sd) => sd.toDateString() === d.toDateString()
                   )
@@ -277,7 +272,7 @@ export default function AssignTimeSlotForm() {
 
           {/* Time Slots */}
           {selectedDates.map((date) => {
-            const ds = date.toISOString().slice(0, 10);
+            const ds = dateToLocalString(date);
             const booked = bookedSlots[ds] ?? Array(24).fill(false);
             const [start, end] = selRanges[ds] ?? [-1, -1];
 

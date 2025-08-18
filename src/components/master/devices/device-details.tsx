@@ -1,25 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type Agency = {
-  id: string;
-  name: string;
-};
-
-type DeviceSummary = {
-  id: string;
-  name: string;
-};
-
+type Agency = { id: string; name: string };
+type DeviceSummary = { id: string; name: string };
 type DeviceDetail = {
   id: string;
   name: string;
@@ -32,7 +17,7 @@ type DeviceDetail = {
   agency: Agency | null;
 };
 
-export default function DevicesListWithDetails() {
+export default function DevicesTableView() {
   const [deviceSummaries, setDeviceSummaries] = useState<DeviceSummary[]>([]);
   const [deviceDetailsMap, setDeviceDetailsMap] = useState<
     Record<string, DeviceDetail>
@@ -43,7 +28,7 @@ export default function DevicesListWithDetails() {
     {}
   );
 
-  // Fetch all devices summary on mount
+  // Fetch devices
   useEffect(() => {
     async function fetchDevices() {
       setLoading(true);
@@ -65,10 +50,9 @@ export default function DevicesListWithDetails() {
     fetchDevices();
   }, []);
 
-  // Fetch details for each device summary
+  // Fetch device details
   useEffect(() => {
     if (deviceSummaries.length === 0) return;
-
     async function fetchDetails() {
       try {
         const detailsEntries = await Promise.all(
@@ -86,101 +70,113 @@ export default function DevicesListWithDetails() {
         setError(err instanceof Error ? err.message : "Error fetching details");
       }
     }
-
     fetchDetails();
   }, [deviceSummaries]);
 
-  if (loading) return <p className="text-center">Loading devices...</p>;
-  if (error) return <p className="text-center text-red-600">{error}</p>;
+  if (loading)
+    return <p className="text-center text-gray-600 mt-8">Loading devices...</p>;
+  if (error) return <p className="text-center text-red-600 mt-8">{error}</p>;
   if (deviceSummaries.length === 0)
-    return <p className="text-center">No devices found.</p>;
+    return <p className="text-center text-gray-700 mt-8">No devices found.</p>;
 
   return (
-    <div>
-      {deviceSummaries.map((device) => {
-        const detail = deviceDetailsMap[device.id];
-        const showApiDocs = showApiDocsFor[device.id] ?? false;
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse rounded-lg overflow-hidden shadow-md">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                Device Name
+              </th>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                Model
+              </th>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                Size
+              </th>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                Agency
+              </th>
+              <th className="px-6 py-3 text-left text-gray-700 font-semibold">
+                API Docs
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {deviceSummaries.map((device) => {
+              const detail = deviceDetailsMap[device.id];
+              const showApiDocs = showApiDocsFor[device.id] ?? false;
 
-        if (!detail) {
-          // Loading detail for this device
-          return (
-            <Card
-              key={device.id}
-              className="max-w-md mx-auto my-4 shadow-md p-4"
-            >
-              <p>Loading details for {device.name}...</p>
-            </Card>
-          );
-        }
+              if (!detail) {
+                return (
+                  <tr key={device.id} className="hover:bg-gray-50">
+                    <td colSpan={6} className="px-6 py-4 text-gray-500">
+                      Loading details for {device.name}...
+                    </td>
+                  </tr>
+                );
+              }
 
-        return (
-          <Card key={detail.id} className="max-w-md mx-auto my-4 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">
-                {detail.name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>
-                <strong>Model:</strong> {detail.model}
-              </p>
-              <p>
-                <strong>Size:</strong> {detail.size}
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span
-                  className={`font-semibold ${
-                    detail.status === "ACTIVE"
-                      ? "text-green-600"
-                      : detail.status === "INACTIVE"
-                      ? "text-red-600"
-                      : "text-yellow-600"
-                  }`}
+              return (
+                <tr
+                  key={detail.id}
+                  className="hover:bg-gray-50 transition-colors duration-200"
                 >
-                  {detail.status}
-                </span>
-              </p>
-              <p>
-                <strong>Assigned Agency:</strong>{" "}
-                {detail.agency ? detail.agency.name : "Not assigned"}
-              </p>
-
-              {showApiDocs && (
-                <div className="mt-4 rounded border border-gray-300 p-4 bg-gray-50 dark:bg-gray-900">
-                  <h4 className="font-semibold mb-2">API Docs</h4>
-                  <p>
-                    <strong>API Endpoint:</strong>{" "}
-                    <code className="break-all">{detail.apiEndpoint}</code>
-                  </p>
-                  <p>
-                    <strong>Public Key:</strong>{" "}
-                    <code className="break-all">{detail.publicKey}</code>
-                  </p>
-                  <p>
-                    <strong>Secret Key:</strong>{" "}
-                    <code className="break-all">{detail.secretKey}</code>
-                  </p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setShowApiDocsFor((prev) => ({
-                    ...prev,
-                    [device.id]: !prev[device.id],
-                  }))
-                }
-              >
-                {showApiDocs ? "Hide API Docs" : "Show API Docs"}
-              </Button>
-            </CardFooter>
-          </Card>
-        );
-      })}
+                  <td className="px-6 py-4 font-medium">{detail.name}</td>
+                  <td className="px-6 py-4">{detail.model}</td>
+                  <td className="px-6 py-4">{detail.size}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-2 py-1 rounded-full text-sm font-semibold ${
+                        detail.status === "ACTIVE"
+                          ? "bg-green-100 text-green-800"
+                          : detail.status === "INACTIVE"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {detail.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {detail.agency?.name || "Not assigned"}
+                  </td>
+                  <td className="px-6 py-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setShowApiDocsFor((prev) => ({
+                          ...prev,
+                          [device.id]: !prev[device.id],
+                        }))
+                      }
+                    >
+                      {showApiDocs ? "Hide" : "Show"}
+                    </Button>
+                    {showApiDocs && (
+                      <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50 text-gray-700 text-sm">
+                        <p>
+                          <strong>API Endpoint:</strong> {detail.apiEndpoint}
+                        </p>
+                        <p>
+                          <strong>Public Key:</strong> {detail.publicKey}
+                        </p>
+                        <p>
+                          <strong>Secret Key:</strong> {detail.secretKey}
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

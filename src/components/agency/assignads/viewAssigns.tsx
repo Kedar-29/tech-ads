@@ -12,10 +12,10 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -43,12 +43,8 @@ interface Ad {
   fileUrl: string;
 }
 
-const hours = Array.from({ length: 19 }, (_, i) => i + 5);
+const hours = Array.from({ length: 19 }, (_, i) => i + 5); // 5AM - 11PM
 const ROW_OPTIONS = [5, 10, 20, 50];
-
-const isAssignmentCompleted = (endTimeISO: string): boolean => {
-  return new Date() > new Date(endTimeISO);
-};
 
 export default function AssignmentsManager() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -67,7 +63,19 @@ export default function AssignmentsManager() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
-  // Sorting: upcoming -> current -> completed
+  const getAssignmentStatus = (
+    startTimeISO: string,
+    endTimeISO: string
+  ): "Upcoming" | "Live" | "Completed" => {
+    const now = new Date();
+    const start = new Date(startTimeISO);
+    const end = new Date(endTimeISO);
+
+    if (now < start) return "Upcoming";
+    if (now >= start && now <= end) return "Live";
+    return "Completed";
+  };
+
   const sortedAssignments = assignments.slice().sort((a, b) => {
     const now = new Date();
     const aStart = new Date(a.startTime);
@@ -75,12 +83,11 @@ export default function AssignmentsManager() {
     const bStart = new Date(b.startTime);
     const bEnd = new Date(b.endTime);
 
-    const aStatus = aStart > now ? 1 : aEnd < now ? 3 : 2; // 1=upcoming, 2=current, 3=completed
+    const aStatus = aStart > now ? 1 : aEnd < now ? 3 : 2; // 1=upcoming, 2=live, 3=completed
     const bStatus = bStart > now ? 1 : bEnd < now ? 3 : 2;
 
     if (aStatus !== bStatus) return aStatus - bStatus;
 
-    // Sort by start time ascending within same status
     return aStart.getTime() - bStart.getTime();
   });
 
@@ -122,6 +129,22 @@ export default function AssignmentsManager() {
     setEditOpen(true);
   };
 
+  const getAvailableHours = (assignment: Assignment | null) => {
+    if (!assignment) return [];
+    const now = new Date();
+    const startDate = new Date(assignment.startTime);
+    return hours.filter((h) => {
+      if (
+        startDate.getFullYear() === now.getFullYear() &&
+        startDate.getMonth() === now.getMonth() &&
+        startDate.getDate() === now.getDate()
+      ) {
+        return h > now.getHours();
+      }
+      return true;
+    });
+  };
+
   const saveEdit = async () => {
     if (!editing || !startHour || !endHour || !selectedAdId) {
       toast.error("Please fill in all fields");
@@ -133,8 +156,15 @@ export default function AssignmentsManager() {
     start.setHours(parseInt(startHour, 10), 0, 0, 0);
     const end = new Date(originalDate);
     end.setHours(parseInt(endHour, 10), 0, 0, 0);
-    if (parseInt(endHour) <= parseInt(startHour))
+
+    if (parseInt(endHour) <= parseInt(startHour)) {
       end.setDate(end.getDate() + 1);
+    }
+
+    if (start < new Date()) {
+      toast.error("Cannot set start time in the past");
+      return;
+    }
 
     try {
       const res = await fetch(`/api/assignments/${editing.id}`, {
@@ -233,7 +263,14 @@ export default function AssignmentsManager() {
                   const startTime = new Date(a.startTime);
                   const endTime = new Date(a.endTime);
                   const date = new Date(startTime.toDateString());
-                  const isCompleted = isAssignmentCompleted(a.endTime);
+                  const status = getAssignmentStatus(a.startTime, a.endTime);
+
+                  const statusColor =
+                    status === "Completed"
+                      ? "text-red-600"
+                      : status === "Live"
+                      ? "text-blue-600"
+                      : "text-green-600";
 
                   return (
                     <TableRow key={a.id}>
@@ -256,11 +293,9 @@ export default function AssignmentsManager() {
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`text-xs font-semibold ${
-                            isCompleted ? "text-red-600" : "text-green-600"
-                          }`}
+                          className={`text-xs font-semibold ${statusColor}`}
                         >
-                          {isCompleted ? "Completed" : "Upcoming"}
+                          {status}
                         </span>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
@@ -276,7 +311,7 @@ export default function AssignmentsManager() {
                           size="sm"
                           variant="outline"
                           onClick={() => openEditDialog(a)}
-                          disabled={isCompleted}
+                          disabled={status === "Live" || status === "Completed"}
                         >
                           Edit
                         </Button>
@@ -284,7 +319,7 @@ export default function AssignmentsManager() {
                           size="sm"
                           variant="destructive"
                           onClick={() => deleteAssignment(a.id)}
-                          disabled={isCompleted}
+                          disabled={status === "Live" || status === "Completed"}
                         >
                           Delete
                         </Button>
@@ -347,7 +382,7 @@ export default function AssignmentsManager() {
                   <SelectValue placeholder="Start time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {hours.map((h) => (
+                  {getAvailableHours(editing!).map((h) => (
                     <SelectItem key={h} value={h.toString().padStart(2, "0")}>
                       {h % 12 || 12} {h < 12 ? "AM" : "PM"}
                     </SelectItem>
@@ -363,11 +398,13 @@ export default function AssignmentsManager() {
                   <SelectValue placeholder="End time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {hours.map((h) => (
-                    <SelectItem key={h} value={h.toString().padStart(2, "0")}>
-                      {h % 12 || 12} {h < 12 ? "AM" : "PM"}
-                    </SelectItem>
-                  ))}
+                  {getAvailableHours(editing!)
+                    .filter((h) => parseInt(h.toString()) > parseInt(startHour))
+                    .map((h) => (
+                      <SelectItem key={h} value={h.toString().padStart(2, "0")}>
+                        {h % 12 || 12} {h < 12 ? "AM" : "PM"}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
