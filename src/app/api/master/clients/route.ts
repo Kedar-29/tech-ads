@@ -1,57 +1,43 @@
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/jwt";
+import { cookies } from "next/headers";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies(); // ✅ await here
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const token = (await cookies()).get("token")?.value;
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const decoded = verifyToken(token);
-
-    if (!decoded || decoded.role !== "MASTER") {
+    if (!decoded || decoded.role !== "MASTER")
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     const masterId = decoded.id;
 
-    const clients = await prisma.agencyClient.findMany({
-      where: {
-        agency: {
-          masterId,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        businessName: true,
-        businessEmail: true,
-        whatsappNumber: true,
-        area: true,
-        city: true,
-        state: true,
-        country: true,
-        pincode: true,
-        agency: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        name: "asc",
-      },
+    const url = new URL(req.url);
+    const page = parseInt(url.searchParams.get("page") ?? "1");
+    const pageSize = parseInt(url.searchParams.get("pageSize") ?? "10");
+    const agencyId = url.searchParams.get("agencyId");
+
+    const whereClause = {
+      agency: { masterId, ...(agencyId ? { id: agencyId } : {}) },
+    };
+
+    const totalClients = await prisma.agencyClient.count({
+      where: whereClause,
     });
 
-    return NextResponse.json(clients);
+    const clients = await prisma.agencyClient.findMany({
+      where: whereClause,
+      include: { agency: true },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: { name: "asc" },
+    });
+
+    return NextResponse.json({ clients, totalClients });
   } catch (error) {
-    console.error("Error fetching clients", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("CLIENTS_FETCH_ERROR", error);
+    return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }

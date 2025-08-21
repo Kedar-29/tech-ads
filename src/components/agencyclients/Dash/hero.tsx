@@ -134,13 +134,7 @@ export default function Globe3D() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
         >
-          <div className="w-full flex h-40 md:h-64 relative overflow-hidden">
-            <img
-              src="https://blocks.mvp-subha.me/assets/earth.png"
-              alt="Earth"
-              className="absolute px-4 top-0 left-1/2 -translate-x-1/2 mx-auto opacity-80"
-            />
-          </div>
+          <div className="w-full flex h-40 md:h-64 relative overflow-hidden"></div>
         </motion.div>
       </div>
     </section>

@@ -6,13 +6,17 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+// ================= GET =================
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSessionUser(req);
   if (!session || session.role !== "AGENCY") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const ad = await prisma.ad.findUnique({
     where: { id },
     select: { id: true, title: true, fileUrl: true, agencyId: true },
@@ -21,17 +25,23 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!ad || ad.agencyId !== session.id) {
     return NextResponse.json({ error: "Ad not found" }, { status: 404 });
   }
+
   return NextResponse.json(ad);
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+// ================= PATCH =================
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSessionUser(req);
   if (!session || session.role !== "AGENCY") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const ad = await prisma.ad.findUnique({ where: { id } });
+
   if (!ad || ad.agencyId !== session.id) {
     return NextResponse.json({ error: "Ad not found" }, { status: 404 });
   }
@@ -45,6 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   let fileUrl = ad.fileUrl;
+
   if (file instanceof File) {
     if (!file.type.startsWith("video/")) {
       return NextResponse.json({ error: "Only video files are allowed" }, { status: 400 });
@@ -70,6 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     await fs.mkdir(uploadDir, { recursive: true });
     await fs.writeFile(filePath, fileBuffer);
+
     fileUrl = `/uploads/${fileName}`;
   }
 
@@ -82,25 +94,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(updatedAd);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+// ================= DELETE =================
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getSessionUser(req);
   if (!session || session.role !== "AGENCY") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const ad = await prisma.ad.findUnique({ where: { id } });
+
   if (!ad || ad.agencyId !== session.id) {
     return NextResponse.json({ error: "Ad not found" }, { status: 404 });
   }
 
+  // Remove file from /public/uploads
   try {
     const filePath = path.join(process.cwd(), "public", ad.fileUrl);
     await fs.unlink(filePath);
   } catch {
-    // ignore errors
+    // ignore file deletion errors
   }
 
+  // ✅ Delete dependent records first (to avoid foreign key errors)
+  await prisma.clientDeviceAdAssignment.deleteMany({ where: { adId: id } });
+  await prisma.adPlayLog.deleteMany({ where: { adId: id } });
+  await prisma.billItem.deleteMany({ where: { adId: id } });
+
+  // Now delete the ad
   await prisma.ad.delete({ where: { id } });
+
   return NextResponse.json({ success: true });
 }
