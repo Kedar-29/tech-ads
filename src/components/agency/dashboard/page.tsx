@@ -4,11 +4,6 @@ import { JSX, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface ClientDevices {
-  clientName: string;
-  deviceCount: number;
-}
-
 interface ClientAds {
   clientName: string;
   assignedAdCount: number;
@@ -22,7 +17,6 @@ interface StatsData {
   totalDevices: number;
   totalClients: number;
   totalAdsCount: number;
-  devicesPerClient: ClientDevices[];
   clientComplaintCounts: Record<string, ClientComplaints>;
   adsAssignedPerClient: ClientAds[];
 }
@@ -145,24 +139,6 @@ export default function AgencyDashboard() {
           </Card>
         ))}
       </div>
-
-      {/* Devices Per Client Table */}
-      {renderTable<ClientDevices, "clientName">(
-        "Devices Per Client",
-        ["Client", "Devices"],
-        stats.devicesPerClient,
-        "clientName",
-        (item) => (
-          <>
-            <td className="px-4 py-2 font-medium text-blue-600 dark:text-blue-400">
-              {item.clientName}
-            </td>
-            <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">
-              {item.deviceCount}
-            </td>
-          </>
-        )
-      )}
 
       {/* Ads Assigned Per Client Table */}
       {renderTable<ClientAds, "clientName">(
