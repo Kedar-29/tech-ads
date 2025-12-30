@@ -1,0 +1,10 @@
+# .env file for TechAds project
+
+# MySQL Database URL (MAMP defaults)
+DATABASE_URL="mysql://root:root@localhost:3306/techads"
+
+JWT_SECRET="supersecretkey123"
+
+# Optional: Add your Next.js environment variables if needed
+# Example:
+# NEXT_PUBLIC_API_URL="http://localhost:3000/api"

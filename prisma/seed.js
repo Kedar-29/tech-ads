@@ -9,7 +9,7 @@ async function main() {
   const hashedPassword1 = await bcrypt.hash("123456", saltRounds);
   const hashedPassword2 = await bcrypt.hash("123456", saltRounds);
 
-  const master1 = await prisma.master.upsert({
+  const master1 = await prisma.Master.upsert({ // Capital M
     where: { email: "kedar@gmail.com" },
     update: {},
     create: {
@@ -19,7 +19,7 @@ async function main() {
     },
   });
 
-  const master2 = await prisma.master.upsert({
+  const master2 = await prisma.Master.upsert({
     where: { email: "gajanan@gmail.com" },
     update: {},
     create: {
